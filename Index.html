@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChatFlow CRM - Vitrine Principal com Google Sheets</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Fontes Google Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.6);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(51, 65, 85, 0.8);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(71, 85, 105, 1);
+    }
+    .chat-bubble-tail-left::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -8px;
+      width: 0;
+      height: 0;
+      border-top: 8px solid #1e293b;
+      border-left: 8px solid transparent;
+    }
+    .chat-bubble-tail-right::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: -8px;
+      width: 0;
+      height: 0;
+      border-top: 8px solid #4f46e5;
+      border-right: 8px solid transparent;
+    }
+  </style>
+</head>
+<body class="h-full font-sans antialiased bg-slate-950 text-slate-100 flex flex-col overflow-hidden">
+
+  <!-- TOAST CONTAINER -->
+  <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 max-w-sm"></div>
+
+  <!-- MAIN HEADER / BARRA SUPERIOR -->
+  <header class="h-16 border-b border-slate-800 bg-slate-900/90 backdrop-blur-md px-4 flex items-center justify-between shrink-0 z-20">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-500/20">
+        <i data-lucide="message-square" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <h1 class="font-bold text-base tracking-tight flex items-center gap-2">
+          ChatFlow CRM
+          <span class="text-[10px] bg-brand-500/20 text-brand-300 font-medium px-2 py-0.5 rounded-full border border-brand-500/30">
+            Vitrine
+          </span>
+        </h1>
+        <p class="text-xs text-slate-400">Banco de Dados: Google Sheets API Integrada</p>
+      </div>
+    </div>
+
+    <!-- Status da Conexão com Google Sheets -->
+    <div class="flex items-center gap-3">
+      <div id="status-badge" class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+        <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+        <span id="status-text">Modo Demonstrativo</span>
+      </div>
+
+      <!-- Botão para Configurar Google API -->
+      <button onclick="openConfigModal()" class="flex items-center gap-2 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-lg border border-slate-700 transition">
+        <i data-lucide="database" class="w-4 h-4 text-brand-400"></i>
+        <span class="hidden md:inline">Conectar Google Sheets</span>
+      </button>
+
+      <!-- Perfil do Operador Logado -->
+      <div class="flex items-center gap-2 pl-2 border-l border-slate-800">
+        <img id="user-avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100" alt="Avatar" class="w-9 h-9 rounded-full object-cover ring-2 ring-brand-500/50" />
+        <div class="hidden lg:block text-left">
+          <p id="user-name" class="text-xs font-semibold leading-none">Carlos Andrade</p>
+          <span id="user-status" class="text-[10px] text-emerald-400">Operador Online</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="flex-1 flex overflow-hidden relative">
+
+    <!-- BARRA LATERAL ESQUERDA: LISTA DE CONVERSAS -->
+    <aside id="sidebar-conversas" class="w-full md:w-80 lg:w-96 bg-slate-900/60 border-r border-slate-800 flex flex-col shrink-0 relative transition-all duration-300 z-10">
+      
+      <!-- Campo de Busca e Nova Conversa -->
+      <div class="p-3 border-b border-slate-800 space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="font-bold text-sm text-slate-200 flex items-center gap-2">
+            Conversas
+            <span id="total-count-badge" class="bg-slate-800 text-slate-400 text-xs px-2 py-0.5 rounded-full">0</span>
+          </h2>
+          <button onclick="syncWithGoogleSheets()" title="Sincronizar Planilha" class="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition">
+            <i data-lucide="refresh-cw" id="sync-icon" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <div class="relative">
+          <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"></i>
+          <input 
+            type="text" 
+            id="search-input"
+            oninput="handleSearch(this.value)"
+            placeholder="Buscar conversa..." 
+            class="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-brand-500 transition"
+          />
+        </div>
+
+        <!-- Filtros Rápidos (Todos, Não Lidos, Online) -->
+        <div class="flex items-center gap-1.5 pt-1">
+          <button 
+            id="filter-todos" 
+            onclick="setFilter('todos')"
+            class="flex-1 py-1.5 px-2 rounded-md text-xs font-medium bg-brand-600 text-white transition flex items-center justify-center gap-1">
+            Todos
+          </button>
+          <button 
+            id="filter-nao-lidos" 
+            onclick="setFilter('nao_lidos')"
+            class="flex-1 py-1.5 px-2 rounded-md text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition flex items-center justify-center gap-1">
+            Não Lidos
+            <span id="unread-count-badge" class="hidden bg-brand-500 text-white text-[10px] px-1.5 py-0.2 rounded-full">0</span>
+          </button>
+          <button 
+            id="filter-online" 
+            onclick="setFilter('online')"
+            class="flex-1 py-1.5 px-2 rounded-md text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition flex items-center justify-center gap-1">
+            Online
+            <span id="online-count-badge" class="hidden bg-emerald-500 text-white text-[10px] px-1.5 py-0.2 rounded-full">0</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Container da Lista de Cards -->
+      <div id="conversas-list" class="flex-1 overflow-y-auto divide-y divide-slate-800/50">
+        <!-- Cards inseridos dinamicamente via JS -->
+      </div>
+
+      <!-- Footer da Sidebar / Informação da Planilha -->
+      <div class="p-3 border-t border-slate-800 bg-slate-950/40 text-[11px] text-slate-500 flex items-center justify-between">
+        <span class="truncate">Sheet: 1L7LLOYXRa...</span>
+        <button onclick="openInfoModal()" class="text-brand-400 hover:underline">Ver Tabela</button>
+      </div>
+    </aside>
+
+    <!-- ÁREA CENTRAL: PAINEL DE CHAT DA CONVERSA SELECIONADA -->
+    <main class="flex-1 flex flex-col bg-slate-950 relative overflow-hidden">
+      
+      <!-- ESTADO VAZIO (NENHUMA CONVERSA SELECIONADA) -->
+      <div id="empty-state" class="flex-1 flex flex-col items-center justify-center p-6 text-center">
+        <div class="w-20 h-20 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-600 mb-4 shadow-xl">
+          <i data-lucide="messages-square" class="w-10 h-10"></i>
+        </div>
+        <h3 class="text-lg font-bold text-slate-200 mb-1">Selecione uma Conversa</h3>
+        <p class="text-xs text-slate-500 max-w-sm mb-6">
+          Escolha um contato na lista lateral para visualizar o histórico de mensagens sincronizado diretamente com seu Google Sheets.
+        </p>
+        <button onclick="selectFirstConversa()" class="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-xs font-semibold transition flex items-center gap-2">
+          <i data-lucide="message-circle" class="w-4 h-4"></i>
+          Abrir Primeira Conversa
+        </button>
+      </div>
+
+      <!-- PAINEL DE MENSAGENS ATIVO -->
+      <div id="chat-panel" class="hidden flex-1 flex flex-col h-full overflow-hidden">
+        
+        <!-- Cabeçalho da Conversa Ativa -->
+        <div class="h-16 border-b border-slate-800 bg-slate-900/50 px-4 flex items-center justify-between shrink-0">
+          <div class="flex items-center gap-3">
+            <button onclick="toggleMobileSidebar()" class="md:hidden p-1.5 rounded-lg hover:bg-slate-800 text-slate-400">
+              <i data-lucide="arrow-left" class="w-5 h-5"></i>
+            </button>
+            
+            <div class="relative">
+              <img id="chat-header-avatar" src="" alt="Avatar" class="w-10 h-10 rounded-full object-cover ring-2 ring-slate-700" />
+              <span id="chat-header-online-indicator" class="w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-slate-900 absolute bottom-0 right-0"></span>
+            </div>
+
+            <div>
+              <h3 id="chat-header-name" class="font-bold text-sm text-slate-100 leading-tight"></h3>
+              <p id="chat-header-status" class="text-xs text-emerald-400">Online agora</p>
+            </div>
+          </div>
+
+          <!-- Ações do Chat -->
+          <div class="flex items-center gap-2">
+            <button onclick="toggleInfoDrawer()" title="Detalhes do Contato" class="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition">
+              <i data-lucide="info" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Histórico de Mensagens -->
+        <div id="messages-container" class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-950/80">
+          <!-- Mensagens renderizadas via JS -->
+        </div>
+
+        <!-- Barra de Envio de Mensagem -->
+        <div class="p-3 border-t border-slate-800 bg-slate-900/60 shrink-0">
+          <form id="message-form" onsubmit="handleSendMessage(event)" class="flex items-center gap-2">
+            <input 
+              type="text" 
+              id="message-input" 
+              placeholder="Digite sua mensagem..." 
+              autocomplete="off"
+              class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand-500 transition"
+            />
+            <button 
+              type="submit" 
+              id="btn-send"
+              class="bg-brand-600 hover:bg-brand-700 text-white p-2.5 rounded-xl font-medium transition flex items-center justify-center shrink-0 shadow-lg shadow-indigo-600/20 disabled:opacity-50">
+              <i data-lucide="send" class="w-4 h-4"></i>
+            </button>
+          </form>
+        </div>
+
+      </div>
+
+    </main>
+
+    <!-- DRAWER DIREITO: DETALHES DO CONTATO -->
+    <aside id="info-drawer" class="hidden xl:flex w-80 bg-slate-900/90 border-l border-slate-800 flex-col shrink-0 p-4 space-y-6 overflow-y-auto">
+      <div class="text-center pb-4 border-b border-slate-800">
+        <img id="drawer-avatar" src="" alt="Avatar" class="w-20 h-20 rounded-full object-cover mx-auto ring-4 ring-slate-800 mb-3" />
+        <h4 id="drawer-name" class="font-bold text-base text-slate-100"></h4>
+        <p id="drawer-status-text" class="text-xs text-slate-400 mt-1"></p>
+      </div>
+
+      <div class="space-y-4 text-xs">
+        <h5 class="font-semibold text-slate-400 uppercase tracking-wider text-[10px]">Dados Registrados no Google Sheets</h5>
+        
+        <div class="bg-slate-950 p-3 rounded-lg border border-slate-800/80 space-y-2">
+          <div class="flex justify-between">
+            <span class="text-slate-500">ID da Conversa:</span>
+            <span id="drawer-id" class="font-mono text-slate-300">#1</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-500">Status Online:</span>
+            <span id="drawer-online" class="text-emerald-400 font-medium">Verdadeiro</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-500">Status Lida:</span>
+            <span id="drawer-lida" class="text-slate-300">Sim</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-500">Registro Ativo:</span>
+            <span id="drawer-ativo" class="text-slate-300">Sim</span>
+          </div>
+        </div>
+
+        <div class="bg-brand-500/10 border border-brand-500/20 p-3 rounded-lg text-brand-300 text-[11px] leading-relaxed">
+          <i data-lucide="info" class="w-3.5 h-3.5 inline mr-1"></i>
+          Esta interface reflete a aba <strong>Conversas</strong> e <strong>Mensagens</strong> definida na especificação da planilha.
+        </div>
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- MODAL DE CONFIGURAÇÃO DO GOOGLE SHEETS API -->
+  <div id="modal-config" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <h3 class="font-bold text-base text-slate-100 flex items-center gap-2">
+          <i data-lucide="database" class="w-5 h-5 text-brand-500"></i>
+          Integrar Google Sheets
+        </h3>
+        <button onclick="closeConfigModal()" class="text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-400 leading-relaxed">
+        Insira o ID da sua planilha Google e a URL do seu Google Apps Script (Web App) para habilitar leitura e escrita em tempo real.
+      </p>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-medium text-slate-300 mb-1">ID da Planilha (Spreadsheet ID)</label>
+          <input 
+            type="text" 
+            id="cfg-spreadsheet-id" 
+            value="1L7LLOYXRa-eCeZgwKhcjapCaiPJvTQu3pRMmff9hqlA"
+            class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 font-mono focus:border-brand-500 focus:outline-none" 
+          />
+        </div>
+
+        <div>
+          <label class="block font-medium text-slate-300 mb-1">URL do Web App (Google Apps Script)</label>
+          <input 
+            type="url" 
+            id="cfg-script-url" 
+            placeholder="https://script.google.com/macros/s/.../exec"
+            class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 font-mono focus:border-brand-500 focus:outline-none" 
+          />
+          <span class="text-[10px] text-slate-500">Insira a URL gerada na implantação do Apps Script (codigo.gs).</span>
+        </div>
+      </div>
+
+      <div class="pt-2 flex items-center justify-end gap-2">
+        <button onclick="saveConfig(false)" class="px-4 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
+          Usar Modo Demo
+        </button>
+        <button onclick="saveConfig(true)" class="px-4 py-2 rounded-lg text-xs font-semibold bg-brand-600 hover:bg-brand-700 text-white transition flex items-center gap-1.5">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          Salvar Conexão
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE VISUALIZAÇÃO DE ESTRUTURA -->
+  <div id="modal-info" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-2xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <h3 class="font-bold text-base text-slate-100 flex items-center gap-2">
+          <i data-lucide="table" class="w-5 h-5 text-emerald-400"></i>
+          Estrutura do Banco de Dados
+        </h3>
+        <button onclick="closeInfoModal()" class="text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-400">
+        Resumo das abas mapeadas no banco de dados do Google Sheets:
+      </p>
+
+      <div class="space-y-4 text-xs">
+        <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+          <span class="font-bold text-brand-400">1. Aba: Conversas</span>
+          <p class="text-slate-400 mt-1">Colunas: id, nome_contato, avatar_url, ultima_mensagem, data_mensagem, lida, status_online, ativo</p>
+        </div>
+        <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+          <span class="font-bold text-emerald-400">2. Aba: Mensagens</span>
+          <p class="text-slate-400 mt-1">Colunas: id, conversa_id, remetente_tipo, conteudo, data_envio, lida, status_envio</p>
+        </div>
+        <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+          <span class="font-bold text-indigo-400">3. Aba: Usuarios</span>
+          <p class="text-slate-400 mt-1">Colunas: id, nome, email, avatar_url, status_recado, status_online, data_criacao</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- MOCK INITIAL STATE (DADOS DEMONSTRATIVOS) ---
+    const mockConversas = [
+      {
+        id: 1,
+        nome_contato: "Maria Silva",
+        avatar_url: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100",
+        ultima_mensagem: "Oi! Você conseguiu revisar o relatório que te enviei?",
+        data_mensagem: new Date().toISOString(),
+        lida: false,
+        status_online: true,
+        ativo: true
+      },
+      {
+        id: 2,
+        nome_contato: "João Santos",
+        avatar_url: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100",
+        ultima_mensagem: "Fechado, nos falamos amanhã na reunião!",
+        data_mensagem: new Date(Date.now() - 3600000 * 2).toISOString(),
+        lida: true,
+        status_online: false,
+        ativo: true
+      },
+      {
+        id: 3,
+        nome_contato: "Ana Oliveira",
+        avatar_url: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100",
+        ultima_mensagem: "Segue em anexo a proposta atualizada.",
+        data_mensagem: new Date(Date.now() - 3600000 * 24).toISOString(),
+        lida: false,
+        status_online: true,
+        ativo: true
+      }
+    ];
+
+    const mockMensagens = [
+      { id: 1, conversa_id: 1, remetente_tipo: "cliente", conteudo: "Oi! Você conseguiu revisar o relatório que te enviei?", data_envio: new Date(Date.now() - 1800000).toISOString(), lida: true, status_envio: "entregue" },
+      { id: 2, conversa_id: 1, remetente_tipo: "operador", conteudo: "Olá Maria, estou revisando agora mesmo!", data_envio: new Date(Date.now() - 1200000).toISOString(), lida: true, status_envio: "entregue" },
+      { id: 3, conversa_id: 2, remetente_tipo: "cliente", conteudo: "Fechado, nos falamos amanhã na reunião!", data_envio: new Date(Date.now() - 3600000 * 2).toISOString(), lida: true, status_envio: "entregue" },
+      { id: 4, conversa_id: 3, remetente_tipo: "cliente", conteudo: "Segue em anexo a proposta atualizada.", data_envio: new Date(Date.now() - 3600000 * 24).toISOString(), lida: false, status_envio: "entregue" }
+    ];
+
+    // --- ESTADO DA APLICAÇÃO ---
+    let state = {
+      conversas: [...mockConversas],
+      mensagens: [...mockMensagens],
+      activeConversaId: null,
+      activeFilter: 'todos',
+      searchQuery: '',
+      isGoogleConnected: false,
+      config: {
+        spreadsheetId: '1L7LLOYXRa-eCeZgwKhcjapCaiPJvTQu3pRMmff9hqlA',
+        scriptUrl: ''
+      }
+    };
+
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      loadStoredConfig();
+      renderConversas();
+      updateBadges();
+    });
+
+    // --- RENDERIZAÇÃO DE CARDS DE CONVERSA ---
+    function renderConversas() {
+      const container = document.getElementById('conversas-list');
+      container.innerHTML = '';
+
+      let filtered = state.conversas.filter(c => c.ativo);
+
+      // Filtro da busca
+      if (state.searchQuery.trim() !== '') {
+        const q = state.searchQuery.toLowerCase();
+        filtered = filtered.filter(c => 
+          c.nome_contato.toLowerCase().includes(q) || 
+          c.ultima_mensagem.toLowerCase().includes(q)
+        );
+      }
+
+      // Filtros rápidos
+      if (state.activeFilter === 'nao_lidos') {
+        filtered = filtered.filter(c => !c.lida);
+      } else if (state.activeFilter === 'online') {
+        filtered = filtered.filter(c => c.status_online);
+      }
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="p-8 text-center text-slate-500 text-xs">
+            Nenhuma conversa encontrada.
+          </div>
+        `;
+        return;
+      }
+
+      filtered.forEach(conversa => {
+        const isActive = conversa.id === state.activeConversaId;
+        const formattedTime = formatTime(conversa.data_mensagem);
+
+        const card = document.createElement('div');
+        card.className = `p-3 flex items-center gap-3 cursor-pointer transition border-l-2 ${
+          isActive 
+            ? 'bg-slate-800/80 border-brand-500' 
+            : 'hover:bg-slate-800/40 border-transparent hover:border-slate-700'
+        }`;
+        
+        card.onclick = () => selectConversa(conversa.id);
+
+        card.innerHTML = `
+          <div class="relative shrink-0">
+            <img src="${conversa.avatar_url}" alt="${conversa.nome_contato}" class="w-12 h-12 rounded-full object-cover ring-2 ${conversa.status_online ? 'ring-emerald-500/50' : 'ring-slate-800'}" />
+            ${conversa.status_online ? '<span class="w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-slate-900 absolute bottom-0 right-0"></span>' : ''}
+          </div>
+
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between mb-1">
+              <h4 class="font-semibold text-xs text-slate-100 truncate ${!conversa.lida ? 'font-bold text-white' : ''}">
+                ${conversa.nome_contato}
+              </h4>
+              <span class="text-[10px] text-slate-500 shrink-0">${formattedTime}</span>
+            </div>
+            
+            <p class="text-xs truncate ${!conversa.lida ? 'text-slate-200 font-medium' : 'text-slate-400'}">
+              ${conversa.ultima_mensagem}
+            </p>
+          </div>
+
+          ${!conversa.lida ? '<span class="w-2 h-2 rounded-full bg-brand-500 shrink-0"></span>' : ''}
+        `;
+
+        container.appendChild(card);
+      });
+    }
+
+    // --- SELEÇÃO DE CONVERSA ---
+    function selectConversa(id) {
+      state.activeConversaId = id;
+      
+      // Marcar conversa como lida
+      const conv = state.conversas.find(c => c.id === id);
+      if (conv) {
+        conv.lida = true;
+      }
+
+      renderConversas();
+      updateBadges();
+      renderChatPanel();
+      
+      document.getElementById('empty-state').classList.add('hidden');
+      document.getElementById('chat-panel').classList.remove('hidden');
+    }
+
+    function selectFirstConversa() {
+      if (state.conversas.length > 0) {
+        selectConversa(state.conversas[0].id);
+      }
+    }
+
+    // --- RENDERIZAÇÃO DO PAINEL DE CHAT ---
+    function renderChatPanel() {
+      const conv = state.conversas.find(c => c.id === state.activeConversaId);
+      if (!conv) return;
+
+      // Atualiza cabeçalho do chat
+      document.getElementById('chat-header-avatar').src = conv.avatar_url;
+      document.getElementById('chat-header-name').textContent = conv.nome_contato;
+      
+      const statusText = document.getElementById('chat-header-status');
+      const onlineIndicator = document.getElementById('chat-header-online-indicator');
+      
+      if (conv.status_online) {
+        statusText.textContent = "Online agora";
+        statusText.className = "text-xs text-emerald-400";
+        onlineIndicator.classList.remove('hidden');
+      } else {
+        statusText.textContent = "Visto por último recentemente";
+        statusText.className = "text-xs text-slate-500";
+        onlineIndicator.classList.add('hidden');
+      }
+
+      // Atualiza Drawer lateral
+      document.getElementById('drawer-avatar').src = conv.avatar_url;
+      document.getElementById('drawer-name').textContent = conv.nome_contato;
+      document.getElementById('drawer-status-text').textContent = conv.status_online ? 'Contato Online' : 'Contato Offline';
+      document.getElementById('drawer-id').textContent = `#${conv.id}`;
+      document.getElementById('drawer-online').textContent = conv.status_online ? 'Verdadeiro' : 'Falso';
+      document.getElementById('drawer-lida').textContent = conv.lida ? 'Sim' : 'Não';
+      document.getElementById('drawer-ativo').textContent = conv.ativo ? 'Sim' : 'Não';
+
+      // Renderiza Histórico de Mensagens
+      const messagesContainer = document.getElementById('messages-container');
+      messagesContainer.innerHTML = '';
+
+      const msgs = state.mensagens.filter(m => m.conversa_id === conv.id);
+
+      if (msgs.length === 0) {
+        messagesContainer.innerHTML = `
+          <div class="text-center text-slate-500 text-xs py-8">
+            Nenhuma mensagem registrada nesta conversa.
+          </div>
+        `;
+        return;
+      }
+
+      msgs.forEach(msg => {
+        const isOperator = msg.remetente_tipo === 'operador';
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `flex ${isOperator ? 'justify-end' : 'justify-start'} mb-3`;
+
+        msgDiv.innerHTML = `
+          <div class="relative max-w-[80%] sm:max-w-[70%] rounded-2xl px-4 py-2.5 text-xs shadow-md ${
+            isOperator 
+              ? 'bg-brand-600 text-white rounded-tr-none chat-bubble-tail-right' 
+              : 'bg-slate-800 text-slate-100 rounded-tl-none chat-bubble-tail-left'
+          }">
+            <p class="leading-relaxed whitespace-pre-wrap">${escapeHtml(msg.conteudo)}</p>
+            <div class="flex items-center justify-end gap-1 mt-1 text-[10px] ${isOperator ? 'text-indigo-200' : 'text-slate-400'}">
+              <span>${formatTime(msg.data_envio)}</span>
+              ${isOperator ? '<i data-lucide="check-check" class="w-3 h-3"></i>' : ''}
+            </div>
+          </div>
+        `;
+        messagesContainer.appendChild(msgDiv);
+      });
+
+      lucide.createIcons();
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    // --- ENVIO DE MENSAGEM ---
+    function handleSendMessage(event) {
+      event.preventDefault();
+      const input = document.getElementById('message-input');
+      const text = input.value.trim();
+
+      if (!text || !state.activeConversaId) return;
+
+      const newMsg = {
+        id: Date.now(),
+        conversa_id: state.activeConversaId,
+        remetente_tipo: 'operador',
+        conteudo: text,
+        data_envio: new Date().toISOString(),
+        lida: true,
+        status_envio: 'entregue'
+      };
+
+      state.mensagens.push(newMsg);
+
+      // Atualiza última mensagem da conversa
+      const conv = state.conversas.find(c => c.id === state.activeConversaId);
+      if (conv) {
+        conv.ultima_mensagem = text;
+        conv.data_mensagem = newMsg.data_envio;
+      }
+
+      input.value = '';
+      renderConversas();
+      renderChatPanel();
+
+      showToast('Mensagem registrada no sistema!', 'success');
+
+      // Se houver script configurado, envia para o Google Sheets via POST
+      if (state.config.scriptUrl) {
+        postToGoogleSheets(newMsg);
+      }
+    }
+
+    // --- FILTROS & BUSCA ---
+    function setFilter(filter) {
+      state.activeFilter = filter;
+      
+      ['todos', 'nao-lidos', 'online'].forEach(f => {
+        const btn = document.getElementById(`filter-${f}`);
+        if (f === filter.replace('_', '-')) {
+          btn.className = "flex-1 py-1.5 px-2 rounded-md text-xs font-medium bg-brand-600 text-white transition flex items-center justify-center gap-1";
+        } else {
+          btn.className = "flex-1 py-1.5 px-2 rounded-md text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition flex items-center justify-center gap-1";
+        }
+      });
+
+      renderConversas();
+    }
+
+    function handleSearch(val) {
+      state.searchQuery = val;
+      renderConversas();
+    }
+
+    function updateBadges() {
+      const total = state.conversas.filter(c => c.ativo).length;
+      const unread = state.conversas.filter(c => c.ativo && !c.lida).length;
+      const online = state.conversas.filter(c => c.ativo && c.status_online).length;
+
+      document.getElementById('total-count-badge').textContent = total;
+      
+      const unreadBadge = document.getElementById('unread-count-badge');
+      if (unread > 0) {
+        unreadBadge.textContent = unread;
+        unreadBadge.classList.remove('hidden');
+      } else {
+        unreadBadge.classList.add('hidden');
+      }
+
+      const onlineBadge = document.getElementById('online-count-badge');
+      if (online > 0) {
+        onlineBadge.textContent = online;
+        onlineBadge.classList.remove('hidden');
+      } else {
+        onlineBadge.classList.add('hidden');
+      }
+    }
+
+    // --- INTEGRAÇÃO GOOGLE SHEETS API ---
+    async function syncWithGoogleSheets() {
+      const syncIcon = document.getElementById('sync-icon');
+      syncIcon.classList.add('animate-spin');
+
+      if (!state.config.scriptUrl) {
+        setTimeout(() => {
+          syncIcon.classList.remove('animate-spin');
+          showToast('Modo Demo: Dados sincronizados localmente.', 'info');
+        }, 600);
+        return;
+      }
+
+      try {
+        const response = await fetch(state.config.scriptUrl + '?action=getDados');
+        if (!response.ok) throw new Error('Falha na resposta do servidor');
+        
+        const data = await response.json();
+        
+        if (data.conversas) state.conversas = data.conversas;
+        if (data.mensagens) state.mensagens = data.mensagens;
+
+        renderConversas();
+        if (state.activeConversaId) renderChatPanel();
+        updateBadges();
+
+        showToast('Dados sincronizados com o Google Sheets!', 'success');
+      } catch (err) {
+        console.error(err);
+        showToast('Erro ao conectar com a API do Google Sheets.', 'error');
+      } finally {
+        syncIcon.classList.remove('animate-spin');
+      }
+    }
+
+    async function postToGoogleSheets(msg) {
+      try {
+        await fetch(state.config.scriptUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'addMensagem', mensagem: msg })
+        });
+      } catch (err) {
+        console.error('Erro ao enviar para o Google Sheets:', err);
+      }
+    }
+
+    // --- CONFIGURAÇÕES & MODAIS ---
+    function openConfigModal() {
+      document.getElementById('modal-config').classList.remove('hidden');
+    }
+
+    function closeConfigModal() {
+      document.getElementById('modal-config').classList.add('hidden');
+    }
+
+    function openInfoModal() {
+      document.getElementById('modal-info').classList.remove('hidden');
+    }
+
+    function closeInfoModal() {
+      document.getElementById('modal-info').classList.add('hidden');
+    }
+
+    function saveConfig(isLive) {
+      const sheetId = document.getElementById('cfg-spreadsheet-id').value.trim();
+      const scriptUrl = document.getElementById('cfg-script-url').value.trim();
+
+      state.config.spreadsheetId = sheetId;
+      state.config.scriptUrl = isLive ? scriptUrl : '';
+      state.isGoogleConnected = isLive && Boolean(scriptUrl);
+
+      localStorage.setItem('chatflow_config', JSON.stringify(state.config));
+
+      const statusBadge = document.getElementById('status-badge');
+      const statusText = document.getElementById('status-text');
+
+      if (state.isGoogleConnected) {
+        statusBadge.className = "hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+        statusText.textContent = "Google Sheets Conectado";
+        showToast('Conexão configurada com sucesso!', 'success');
+        syncWithGoogleSheets();
+      } else {
+        statusBadge.className = "hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20";
+        statusText.textContent = "Modo Demonstrativo";
+        showToast('Modo Demonstrativo ativado.', 'info');
+      }
+
+      closeConfigModal();
+    }
+
+    function loadStoredConfig() {
+      const stored = localStorage.getItem('chatflow_config');
+      if (stored) {
+        try {
+          state.config = JSON.parse(stored);
+          document.getElementById('cfg-spreadsheet-id').value = state.config.spreadsheetId || '';
+          document.getElementById('cfg-script-url').value = state.config.scriptUrl || '';
+          if (state.config.scriptUrl) {
+            saveConfig(true);
+          }
+        } catch(e) {}
+      }
+    }
+
+    // --- UTILITÁRIOS ---
+    function formatTime(isoStr) {
+      if (!isoStr) return '';
+      const date = new Date(isoStr);
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/[&<"']/g, function(m) {
+        return { '&': '&amp;', '<': '&lt;', '"': '&quot;', "'": '&#039;' }[m];
+      });
+    }
+
+    function showToast(msg, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      
+      const colors = {
+        success: 'bg-emerald-950 border-emerald-800 text-emerald-200',
+        error: 'bg-red-950 border-red-800 text-red-200',
+        info: 'bg-slate-900 border-slate-800 text-slate-200'
+      };
+
+      toast.className = `p-3 rounded-xl border text-xs shadow-2xl flex items-center gap-2 transition-all duration-300 transform translate-y-2 opacity-0 ${colors[type] || colors.info}`;
+      toast.innerHTML = `<i data-lucide="info" class="w-4 h-4 shrink-0"></i><span>${msg}</span>`;
+
+      container.appendChild(toast);
+      lucide.createIcons();
+
+      requestAnimationFrame(() => {
+        toast.classList.remove('translate-y-2', 'opacity-0');
+      });
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    function toggleMobileSidebar() {
+      document.getElementById('sidebar-conversas').classList.toggle('hidden');
+    }
+
+    function toggleInfoDrawer() {
+      document.getElementById('info-drawer').classList.toggle('hidden');
+    }
+  </script>
+</body>
+</html>
