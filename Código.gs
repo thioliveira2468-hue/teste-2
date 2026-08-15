@@ -47,6 +47,8 @@ function doPost(e) {
       return atualizarConversa(dados.conversa);
     } else if (action === "adicionarConversa") {
       return adicionarConversa(dados.conversa);
+    } else if (action === "adicionarUsuario") {
+      return adicionarUsuario(dados.usuario);
     } else {
       return sendJsonResponse({ erro: "Ação POST não reconhecida" }, 400);
     }
@@ -324,6 +326,34 @@ function adicionarConversa(conversa) {
       sucesso: true, 
       mensagem: "Conversa adicionada com sucesso",
       dados: conversa
+    });
+  } catch (error) {
+    return sendJsonResponse({ erro: error.toString() }, 500);
+  }
+}
+
+// ============================================
+// ADICIONAR USUARIO NO SHEETS
+// ============================================
+function adicionarUsuario(usuario) {
+  try {
+    const sheet = getSheet(USUARIOS_SHEET);
+    if (!sheet) throw new Error("Aba 'Usuarios' não encontrada");
+
+    const headerRange = sheet.getRange(1, 1, 1, sheet.getLastColumn());
+    const headers = headerRange.getValues()[0];
+
+    const novaLinha = [];
+    headers.forEach(header => {
+      novaLinha.push(usuario[header] !== undefined ? usuario[header] : "");
+    });
+
+    sheet.appendRow(novaLinha);
+
+    return sendJsonResponse({ 
+      sucesso: true, 
+      mensagem: "Usuário adicionado com sucesso",
+      dados: usuario
     });
   } catch (error) {
     return sendJsonResponse({ erro: error.toString() }, 500);
